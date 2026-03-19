@@ -1,23 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Family Ledger</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { background-color: #f4f7f6; padding-bottom: 50px; }
-        .ledger-card { border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .balance-usd { color: #008080; }
-        .bg-usd { background-color: #008080; }
-        .balance-cad { color: #808000; }
-        .bg-cad { background-color: #808000; }
-        .user-alice { color: #dc3545; font-weight: bold; }
-        .user-bob { color: #007bff; font-weight: bold; }
-        .scroll-box { max-height: 400px; overflow-y: auto; }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Family Ledger{% endblock %}
 
+{% block body %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>💰 Family Ledger</h2>
@@ -32,12 +16,13 @@
                 <div class="card-header bg-usd text-white fw-bold text-center">🇺🇸 USD Wallet</div>
                 <div class="card-body">
                     <h1 class="text-center display-4 fw-bold mb-4 balance-usd">${{ "%.2f"|format(usd_total) }}</h1>
-                    
+
                     <form action="/add_fund/USD" method="POST" class="mb-4 p-3 bg-light rounded">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row g-2">
                             <div class="col-4">
                                 <select name="user" class="form-select form-select-sm">
-					<option value="Maggie">Maggie</option>
+                                    <option value="Maggie">Maggie</option>
                                     <option value="Yuch">Yuch</option>
                                 </select>
                             </div>
@@ -65,7 +50,7 @@
                             {% for tx in usd_txs %}
                             <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                 <div>
-                                    <span class="{{ 'user-bob' if tx.user == 'Yuch' else 'user-alice' }}">{{ tx.user }}</span>: 
+                                    <span class="{{ 'user-bob' if tx.user == 'Yuch' else 'user-alice' }}">{{ tx.user }}</span>:
                                     {{ tx.description }}
                                 </div>
                                 <div class="d-flex align-items-center">
@@ -87,8 +72,9 @@
                 <div class="card-header bg-cad text-white fw-bold text-center">🇨🇦 CAD Wallet</div>
                 <div class="card-body">
                     <h1 class="text-center display-4 fw-bold mb-4 balance-cad">${{ "%.2f"|format(cad_total) }}</h1>
-                    
+
                     <form action="/add_fund/CAD" method="POST" class="mb-4 p-3 bg-light rounded">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="row g-2">
                             <div class="col-4">
                                 <select name="user" class="form-select form-select-sm">
@@ -120,7 +106,7 @@
                             {% for tx in cad_txs %}
                             <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                                 <div>
-                                    <span class="{{ 'user-bob' if tx.user == 'Yuch' else 'user-alice' }}">{{ tx.user }}</span>: 
+                                    <span class="{{ 'user-bob' if tx.user == 'Yuch' else 'user-alice' }}">{{ tx.user }}</span>:
                                     {{ tx.description }}
                                 </div>
                                 <div class="d-flex align-items-center">
@@ -138,6 +124,4 @@
         </div>
     </div>
 </div>
-
-</body>
-</html>
+{% endblock %}
