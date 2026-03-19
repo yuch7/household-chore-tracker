@@ -17,19 +17,17 @@ struct CalendarView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Month navigation
                 monthHeader
 
-                // Weekday headers
-                weekdayHeader
-
-                // Calendar grid
-                calendarGrid
-
-                Divider()
-
-                // Events for selected date
-                eventsList
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(daysInMonth(), id: \.self) { day in
+                            if let day = day {
+                                dayRow(for: day)
+                            }
+                        }
+                    }
+                }
             }
             .navigationTitle("Calendar")
             .toolbar {
@@ -42,6 +40,7 @@ struct CalendarView: View {
             .sheet(isPresented: $showAddEvent) {
                 AddEventSheet(onSave: { await loadEvents() })
             }
+            .refreshable { await loadEvents() }
             .task { await loadEvents() }
         }
     }
@@ -72,106 +71,67 @@ struct CalendarView: View {
         .padding()
     }
 
-    private var weekdayHeader: some View {
-        HStack {
-            ForEach(["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], id: \.self) { day in
-                Text(day)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal)
-    }
-
-    private var calendarGrid: some View {
-        let days = daysInMonth()
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-            ForEach(days, id: \.self) { day in
-                if let day = day {
-                    let dateStr = dateFormatter.string(from: day)
-                    let dayEvents = events.filter { $0.displayDate == dateStr }
-                    let isSelected = calendar.isDate(day, inSameDayAs: selectedDate)
-
-                    Button {
-                        selectedDate = day
-                    } label: {
-                        VStack(spacing: 2) {
-                            Text("\(calendar.component(.day, from: day))")
-                                .font(.body)
-                                .foregroundColor(isSelected ? .white : .primary)
-
-                            HStack(spacing: 2) {
-                                ForEach(Array(dayEvents.prefix(3).enumerated()), id: \.offset) { _, event in
-                                    Circle()
-                                        .fill(Color(hex: event.displayColor))
-                                        .frame(width: 5, height: 5)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(isSelected ? Color.blue : Color.clear)
-                        )
-                    }
-                } else {
-                    Text("")
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                }
-            }
-        }
-        .padding(.horizontal)
-    }
-
-    private var eventsList: some View {
-        let dateStr = dateFormatter.string(from: selectedDate)
+    private func dayRow(for day: Date) -> some View {
+        let dateStr = dateFormatter.string(from: day)
         let dayEvents = events.filter { $0.displayDate == dateStr }
+        let isToday = calendar.isDateInToday(day)
+        let dayOfWeek = day.formatted(.dateTime.weekday(.abbreviated))
 
-        return List {
-            if dayEvents.isEmpty {
-                Text("No events")
+        return VStack(alignment: .leading, spacing: 0) {
+            // Day header
+            HStack(spacing: 8) {
+                Text("\(calendar.component(.day, from: day))")
+                    .font(.system(size: 20, weight: isToday ? .bold : .medium, design: .rounded))
+                    .foregroundColor(isToday ? .white : .primary)
+                    .frame(width: 34, height: 34)
+                    .background(isToday ? Color.blue : Color.clear)
+                    .clipShape(Circle())
+
+                Text(dayOfWeek)
+                    .font(.subheadline)
                     .foregroundColor(.secondary)
-            } else {
-                ForEach(dayEvents) { event in
-                    HStack {
-                        Circle()
-                            .fill(Color(hex: event.displayColor))
-                            .frame(width: 10, height: 10)
-                        VStack(alignment: .leading) {
-                            Text(event.title)
-                                .font(.body)
-                            if let time = event.startTime {
-                                Text(time)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
-                .onDelete { indexSet in
-                    let toDelete = indexSet.map { dayEvents[$0] }
-                    Task {
-                        for event in toDelete {
-                            if event.type == "event" {
-                                try? await api.deleteEvent(id: event.dbId)
-                            }
-                        }
-                        await loadEvents()
-                    }
-                }
+
+                Spacer()
             }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, dayEvents.isEmpty ? 8 : 4)
+
+            // Events for this day
+            ForEach(dayEvents) { event in
+                HStack(spacing: 8) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(hex: event.displayColor))
+                        .frame(width: 4)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(event.title)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        if let time = event.startTime {
+                            Text(time)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Spacer()
+                }
+                .frame(height: 32)
+                .padding(.horizontal)
+                .padding(.leading, 24)
+            }
+
+            Divider()
+                .padding(.leading)
         }
-        .listStyle(.plain)
     }
 
     private func daysInMonth() -> [Date?] {
         let range = calendar.range(of: .day, in: .month, for: currentMonth)!
         let firstDay = calendar.date(from: calendar.dateComponents([.year, .month], from: currentMonth))!
-        let weekday = calendar.component(.weekday, from: firstDay)
-        let leadingBlanks = weekday - 1
 
-        var days: [Date?] = Array(repeating: nil, count: leadingBlanks)
+        var days: [Date?] = []
         for day in range {
             days.append(calendar.date(byAdding: .day, value: day - 1, to: firstDay))
         }

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var authService: AuthService
-    @State private var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:7990"
+    @State private var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://yuch.ddns.net:7990"
     @State private var tasks: [ChoreTask] = []
     @State private var showAddTask = false
     @State private var newTaskName = ""
@@ -36,15 +36,6 @@ struct SettingsView: View {
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
-                        }
-                    }
-                    .onDelete { indexSet in
-                        let toDelete = indexSet.map { tasks[$0].id }
-                        Task {
-                            for id in toDelete {
-                                try? await api.deleteTask(id: id)
-                            }
-                            await loadTasks()
                         }
                     }
 

@@ -23,7 +23,7 @@ class APIClient: ObservableObject {
     static let shared = APIClient()
 
     private var baseURL: String {
-        UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:7990"
+        UserDefaults.standard.string(forKey: "serverURL") ?? "http://yuch.ddns.net:7990"
     }
 
     private var token: String? {
@@ -80,8 +80,8 @@ class APIClient: ObservableObject {
 
     // MARK: - Auth
 
-    func authenticateWithGoogle(idToken: String) async throws -> String {
-        let data = try await makeRequest("/api/auth/google", method: "POST", body: ["id_token": idToken])
+    func authenticateWithApple(identityToken: String) async throws -> String {
+        let data = try await makeRequest("/api/v1/auth/apple", method: "POST", body: ["identity_token": identityToken])
         let result = try decode([String: String].self, from: data)
         guard let token = result["token"] else {
             throw APIError.serverError(0, "No token in response")
@@ -92,19 +92,19 @@ class APIClient: ObservableObject {
     // MARK: - Balance
 
     func getBalance() async throws -> Balance {
-        let data = try await makeRequest("/api/balance")
+        let data = try await makeRequest("/api/v1/balance")
         return try decode(Balance.self, from: data)
     }
 
     // MARK: - Tasks
 
     func getTasks() async throws -> [ChoreTask] {
-        let data = try await makeRequest("/api/tasks")
+        let data = try await makeRequest("/api/v1/tasks")
         return try decode([ChoreTask].self, from: data)
     }
 
     func createTask(name: String, reward: Double, limitCount: Int, interval: String) async throws -> ChoreTask {
-        let data = try await makeRequest("/api/tasks", method: "POST", body: [
+        let data = try await makeRequest("/api/v1/tasks", method: "POST", body: [
             "name": name, "reward": reward,
             "limit_count": limitCount, "interval": interval
         ])
@@ -112,7 +112,7 @@ class APIClient: ObservableObject {
     }
 
     func deleteTask(id: Int) async throws {
-        _ = try await makeRequest("/api/tasks/\(id)", method: "DELETE")
+        _ = try await makeRequest("/api/v1/tasks/\(id)", method: "DELETE")
     }
 
     // MARK: - Chores
@@ -120,26 +120,38 @@ class APIClient: ObservableObject {
     func logChore(taskId: Int, user: String, date: String? = nil) async throws -> ChoreLog {
         var body: [String: Any] = ["task_id": taskId, "user": user]
         if let date = date { body["date"] = date }
-        let data = try await makeRequest("/api/chores", method: "POST", body: body)
+        let data = try await makeRequest("/api/v1/chores", method: "POST", body: body)
         return try decode(ChoreLog.self, from: data)
     }
 
     func logCustomChore(user: String, name: String, amount: Double) async throws -> ChoreLog {
-        let data = try await makeRequest("/api/chores/custom", method: "POST", body: [
+        let data = try await makeRequest("/api/v1/chores/custom", method: "POST", body: [
             "user": user, "name": name, "amount": amount
         ])
         return try decode(ChoreLog.self, from: data)
     }
 
     func getHistory(page: Int = 1) async throws -> ChoreHistoryResponse {
-        let data = try await makeRequest("/api/history?page=\(page)")
+        let data = try await makeRequest("/api/v1/history?page=\(page)")
         return try decode(ChoreHistoryResponse.self, from: data)
+    }
+
+    func deleteChore(id: Int) async throws {
+        _ = try await makeRequest("/api/v1/chores/\(id)", method: "DELETE")
+    }
+
+    func moveChore(id: Int, date: String) async throws {
+        _ = try await makeRequest("/api/v1/chores/\(id)/move", method: "POST", body: ["date": date])
+    }
+
+    func moveEvent(id: Int, date: String) async throws {
+        _ = try await makeRequest("/api/v1/events/\(id)", method: "PUT", body: ["event_date": date])
     }
 
     // MARK: - Calendar Events
 
     func getEvents(start: String? = nil, end: String? = nil) async throws -> [CalendarEvent] {
-        var path = "/api/events"
+        var path = "/api/v1/events"
         if let start = start, let end = end {
             path += "?start=\(start)&end=\(end)"
         }
@@ -151,29 +163,29 @@ class APIClient: ObservableObject {
         var body: [String: Any] = ["title": title, "event_date": eventDate, "color": color]
         if let startTime = startTime { body["start_time"] = startTime }
         if let durationMinutes = durationMinutes { body["duration_minutes"] = durationMinutes }
-        _ = try await makeRequest("/api/events", method: "POST", body: body)
+        _ = try await makeRequest("/api/v1/events", method: "POST", body: body)
     }
 
     func deleteEvent(id: Int) async throws {
-        _ = try await makeRequest("/api/events/\(id)", method: "DELETE")
+        _ = try await makeRequest("/api/v1/events/\(id)", method: "DELETE")
     }
 
     // MARK: - Ledger
 
     func getLedger(currency: String) async throws -> LedgerResponse {
-        let data = try await makeRequest("/api/ledger/\(currency)")
+        let data = try await makeRequest("/api/v1/ledger/\(currency)")
         return try decode(LedgerResponse.self, from: data)
     }
 
     func addTransaction(currency: String, user: String, description: String, amount: Double, type: String) async throws {
-        _ = try await makeRequest("/api/ledger/\(currency)", method: "POST", body: [
+        _ = try await makeRequest("/api/v1/ledger/\(currency)", method: "POST", body: [
             "user": user, "description": description,
             "amount": amount, "type": type
         ])
     }
 
     func deleteTransaction(currency: String, id: Int) async throws {
-        _ = try await makeRequest("/api/ledger/\(currency)/\(id)", method: "DELETE")
+        _ = try await makeRequest("/api/v1/ledger/\(currency)/\(id)", method: "DELETE")
     }
 }
 

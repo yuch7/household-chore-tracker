@@ -3,16 +3,15 @@ import secrets
 from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import Blueprint, request, jsonify
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
+from urllib.parse import urlencode
+from flask import Blueprint, request, jsonify, redirect, url_for
 from sqlalchemy import func
 
-from extensions import db
+from extensions import db, oauth
 from models import User, ApiToken, Task, ChoreLog, CalendarEvent, Transaction
 from services import get_date_range
 
-api_bp = Blueprint('api', __name__, url_prefix='/api')
+api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
 WHITELIST = ["yuchen7990@gmail.com", "maggiezhuu@gmail.com"]
 
@@ -32,23 +31,23 @@ def api_auth_required(f):
     return decorated
 
 
-# --- Auth ---
+# --- Auth (Google OAuth via web flow) ---
 
-@api_bp.route('/auth/google', methods=['POST'])
-def auth_google():
-    data = request.get_json()
-    id_token_str = data.get('id_token')
-    if not id_token_str:
-        return jsonify({'error': 'id_token required'}), 400
+@api_bp.route('/auth/login')
+def auth_login():
+    """iOS opens this in ASWebAuthenticationSession to start Google OAuth."""
+    google = oauth.create_client('google')
+    redirect_uri = url_for('api.auth_callback', _external=True)
+    return google.authorize_redirect(redirect_uri)
 
-    try:
-        client_id = os.environ["GOOGLE_CLIENT_ID"]
-        idinfo = id_token.verify_oauth2_token(
-            id_token_str, google_requests.Request(), client_id
-        )
-        email = idinfo['email']
-    except Exception as e:
-        return jsonify({'error': f'Invalid token: {str(e)}'}), 401
+
+@api_bp.route('/auth/callback')
+def auth_callback():
+    """Google OAuth callback — redirects back to app with token."""
+    google = oauth.create_client('google')
+    token = google.authorize_access_token()
+    user_info = token.get('userinfo')
+    email = user_info['email']
 
     if email not in WHITELIST:
         return jsonify({'error': 'Email not whitelisted'}), 403
@@ -64,7 +63,8 @@ def auth_google():
     db.session.add(api_token)
     db.session.commit()
 
-    return jsonify({'token': token_str, 'email': email})
+    params = urlencode({'token': token_str, 'email': email})
+    return redirect(f'choretracker://auth?{params}')
 
 
 # --- Balance ---
@@ -216,6 +216,43 @@ def chore_history():
         'pages': pagination.pages,
         'total': pagination.total
     })
+
+
+@api_bp.route('/chores/<int:id>', methods=['DELETE'])
+@api_auth_required
+def delete_chore(id):
+    ChoreLog.query.filter_by(id=id).delete()
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+
+@api_bp.route('/chores/<int:id>/move', methods=['POST'])
+@api_auth_required
+def move_chore(id):
+    data = request.get_json()
+    new_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+    log = ChoreLog.query.get_or_404(id)
+
+    if log.task_name.startswith("Custom:"):
+        log.date_completed = new_date
+        db.session.commit()
+        return jsonify({'status': 'success'})
+
+    task = Task.query.filter_by(name=log.task_name).first()
+    if task:
+        start_date, end_date = get_date_range(task.interval, new_date)
+        count = ChoreLog.query.filter(
+            ChoreLog.task_name == task.name,
+            ChoreLog.date_completed >= start_date,
+            ChoreLog.date_completed <= end_date,
+            ChoreLog.id != log.id
+        ).count()
+        if count >= task.limit_count:
+            return jsonify({'error': 'Limit reached for this interval'}), 409
+
+    log.date_completed = new_date
+    db.session.commit()
+    return jsonify({'status': 'success'})
 
 
 # --- Calendar Events ---

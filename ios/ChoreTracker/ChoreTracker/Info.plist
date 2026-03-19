@@ -7,5 +7,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>choretracker</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.choretracker.app</string>
+		</dict>
+	</array>
 </dict>
 </plist>

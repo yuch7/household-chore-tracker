@@ -8,11 +8,6 @@ struct ContentView: View {
                     Label("Home", systemImage: "house.fill")
                 }
 
-            CalendarView()
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
-
             LedgerView()
                 .tabItem {
                     Label("Ledger", systemImage: "dollarsign.circle.fill")

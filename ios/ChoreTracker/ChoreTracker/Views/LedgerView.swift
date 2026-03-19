@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LedgerView: View {
-    @State private var selectedCurrency = "USD"
+    @State private var selectedCurrency = "CAD"
     @State private var ledger: LedgerResponse?
     @State private var showAddForm = false
     @State private var user = "Yuch"
@@ -9,6 +9,7 @@ struct LedgerView: View {
     @State private var amount = ""
     @State private var transactionType = "add"
     @State private var errorMessage: String?
+    @State private var transactionToEdit: Transaction?
 
     private let api = APIClient.shared
     private let currencies = ["USD", "CAD"]
@@ -43,28 +44,24 @@ struct LedgerView: View {
                 List {
                     if let transactions = ledger?.transactions {
                         ForEach(transactions) { tx in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(tx.description ?? "No description")
-                                        .font(.body)
-                                    Text(tx.user ?? "")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                            Button {
+                                transactionToEdit = tx
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(tx.description ?? "No description")
+                                            .font(.body)
+                                        Text(tx.user ?? "")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(String(format: "%@$%.2f", tx.amount >= 0 ? "+" : "", tx.amount))
+                                        .font(.body.monospacedDigit())
+                                        .foregroundColor(tx.amount >= 0 ? .green : .red)
                                 }
-                                Spacer()
-                                Text(String(format: "%@$%.2f", tx.amount >= 0 ? "+" : "", tx.amount))
-                                    .font(.body.monospacedDigit())
-                                    .foregroundColor(tx.amount >= 0 ? .green : .red)
                             }
-                        }
-                        .onDelete { indexSet in
-                            let toDelete = indexSet.compactMap { transactions[$0].id }
-                            Task {
-                                for id in toDelete {
-                                    try? await api.deleteTransaction(currency: selectedCurrency, id: id)
-                                }
-                                await loadLedger()
-                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -77,6 +74,9 @@ struct LedgerView: View {
                 } label: {
                     Image(systemName: showAddForm ? "minus.circle" : "plus.circle")
                 }
+            }
+            .sheet(item: $transactionToEdit) { tx in
+                EditTransactionSheet(transaction: tx, currency: selectedCurrency, onSave: { await loadLedger() })
             }
             .refreshable { await loadLedger() }
             .task { await loadLedger() }
@@ -140,6 +140,79 @@ struct LedgerView: View {
             amount = ""
             showAddForm = false
             await loadLedger()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+struct EditTransactionSheet: View {
+    let transaction: Transaction
+    let currency: String
+    let onSave: () async -> Void
+    @Environment(\.dismiss) var dismiss
+
+    @State private var errorMessage: String?
+
+    private let api = APIClient.shared
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    HStack {
+                        Text("Description")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(transaction.description ?? "No description")
+                    }
+                    HStack {
+                        Text("User")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(transaction.user ?? "")
+                    }
+                    HStack {
+                        Text("Amount")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(String(format: "$%.2f", transaction.amount))
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        Task { await delete() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Label("Delete Transaction", systemImage: "trash")
+                            Spacer()
+                        }
+                    }
+                }
+
+                if let error = errorMessage {
+                    Text(error)
+                        .foregroundColor(.red)
+                        .font(.caption)
+                }
+            }
+            .navigationTitle("Transaction")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func delete() async {
+        do {
+            try await api.deleteTransaction(currency: currency, id: transaction.id)
+            await onSave()
+            dismiss()
         } catch {
             errorMessage = error.localizedDescription
         }

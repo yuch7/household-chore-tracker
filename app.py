@@ -1,5 +1,5 @@
 import os
-from flask import Flask
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from extensions import db, login_manager, csrf, oauth
 from models import User
@@ -31,6 +31,13 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        if request.path.startswith('/api/'):
+            return jsonify({'error': 'Unauthorized'}), 401
+        from flask import redirect, url_for
+        return redirect(url_for('auth.login_page'))
 
     from routes.auth import auth_bp
     from routes.chores import chores_bp

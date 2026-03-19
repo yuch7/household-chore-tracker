@@ -1,8 +1,9 @@
 import SwiftUI
-import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var authService: AuthService
+    @State private var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://yuch.ddns.net:7990"
+    @State private var showServerConfig = false
 
     var body: some View {
         VStack(spacing: 30) {
@@ -22,24 +23,48 @@ struct LoginView: View {
 
             Spacer()
 
-            SignInWithAppleButton(.signIn) { request in
-                request.requestedScopes = [.email]
-            } onCompletion: { result in
-                // For now, use a development bypass since Google Sign-In
-                // requires the GoogleSignIn SDK which needs CocoaPods/SPM setup.
-                // In production, replace with Google Sign-In flow.
+            Button {
+                authService.startGoogleSignIn()
+            } label: {
+                HStack {
+                    Image(systemName: "globe")
+                    Text("Sign in with Google")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.white)
+                .foregroundColor(.black)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                )
             }
-            .signInWithAppleButtonStyle(.black)
-            .frame(height: 50)
             .padding(.horizontal, 40)
 
-            // Dev mode: manual token entry
-            NavigationLink("Developer Login") {
-                DevLoginView()
-                    .environmentObject(authService)
+            Button {
+                showServerConfig.toggle()
+            } label: {
+                Text("Server: \(serverURL)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
+
+            if showServerConfig {
+                HStack {
+                    TextField("Server URL", text: $serverURL)
+                        .textFieldStyle(.roundedBorder)
+                        .autocapitalization(.none)
+                        .keyboardType(.URL)
+                    Button("Save") {
+                        UserDefaults.standard.set(serverURL, forKey: "serverURL")
+                        showServerConfig = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.horizontal, 40)
+            }
 
             if let error = authService.errorMessage {
                 Text(error)
@@ -50,39 +75,5 @@ struct LoginView: View {
 
             Spacer()
         }
-        .navigationTitle("")
-    }
-}
-
-struct DevLoginView: View {
-    @EnvironmentObject var authService: AuthService
-    @State private var serverURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:7990"
-    @State private var token = ""
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        Form {
-            Section("Server URL") {
-                TextField("http://localhost:7990", text: $serverURL)
-                    .autocapitalization(.none)
-                    .keyboardType(.URL)
-            }
-
-            Section("API Token") {
-                TextField("Paste token from server", text: $token)
-                    .autocapitalization(.none)
-            }
-
-            Section {
-                Button("Connect") {
-                    UserDefaults.standard.set(serverURL, forKey: "serverURL")
-                    KeychainHelper.save(key: "api_token", value: token)
-                    authService.isAuthenticated = true
-                    dismiss()
-                }
-                .disabled(token.isEmpty)
-            }
-        }
-        .navigationTitle("Developer Login")
     }
 }
