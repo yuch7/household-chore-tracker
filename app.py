@@ -35,10 +35,13 @@ def create_app():
     from routes.auth import auth_bp
     from routes.chores import chores_bp
     from routes.ledger import ledger_bp
+    from routes.api import api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(chores_bp)
     app.register_blueprint(ledger_bp)
+    app.register_blueprint(api_bp)
+    csrf.exempt(api_bp)
 
     with app.app_context():
         if not os.path.exists('/app/instance'):

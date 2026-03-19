@@ -5,3 +5,4 @@ flask-wtf
 authlib
 requests
 python-dotenv
+google-auth

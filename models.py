@@ -41,3 +41,11 @@ class Transaction(db.Model):
     description = db.Column(db.String(100))
     amount = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=datetime.now)
+
+
+class ApiToken(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    user = db.relationship('User', backref='api_tokens')
