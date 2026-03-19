@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maggie & Yuch Budget</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; padding-bottom: 100px; }
+        .budget-card { border-radius: 20px; border: none; transition: transform 0.2s; }
+        .budget-positive { color: #28a745; }
+        .budget-negative { color: #dc3545; }
+        #calendar { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .fc-event { cursor: pointer; padding: 2px 5px; border-radius: 4px; font-size: 0.85em; }
+        #move-banner { border-top-left-radius: 25px; border-top-right-radius: 25px; z-index: 2000; }
+        .fc-daygrid-day.move-target-highlight { background-color: rgba(13, 110, 253, 0.1) !important; cursor: cell; }
+    </style>
+</head>
+<body>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">🏠 Maggie & Yuch Budget</h2>
+            <small class="text-muted">Welcome, {% if current_user.email == 'maggiezhuu@gmail.com' %}
+            <span class="user-alice">Maggie</span>
+        {% elif current_user.email == 'yuchen7990@gmail.com' %}
+            <span class="user-bob">Yuch</span>
+        {% else %}
+            {{ current_user.email }}
+        {% endif %}</small>
+        </div>
+        <div class="text-end">
+            <a href="/ledger" class="btn btn-outline-success btn-sm me-2">💰 Ledger</a>
+            <a href="/history" class="btn btn-outline-primary btn-sm me-2">📜 History</a>
+            <a href="/manage" class="btn btn-outline-secondary btn-sm me-2">⚙️ Settings</a>
+            <a href="/logout" class="btn btn-link btn-sm text-danger text-decoration-none">Logout</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-3">
+            <div class="card shadow-sm p-4 mb-4 budget-card text-center">
+                <h6 class="text-muted text-uppercase small fw-bold">Current Balance</h6>
+                <h1 class="display-5 fw-bold {{ 'budget-negative' if total_budget < 0 else 'budget-positive' }}">
+                    ${{ "%.2f"|format(total_budget) }}
+                </h1>
+            </div>
+
+            <div class="card shadow-sm p-4 mb-4">
+                <h5 class="mb-3 fw-bold">Log a Chore</h5>
+                <form action="/add_chore" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Who?</label>
+                        <select name="user" class="form-select" required>
+                            <option value="Maggie">Maggie</option>
+                            <option value="Yuch">Yuch</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Task</label>
+                        <select name="task_id" class="form-select" required>
+                            {% for task in tasks %}
+                            <option value="{{ task.id }}">{{ task.name }} (${{ task.reward }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Add to Today</button>
+                </form>
+                <hr>
+                <button class="btn btn-outline-dark btn-sm w-100" data-bs-toggle="collapse" data-bs-target="#customForm">
+                    + Add Custom
+                </button>
+                <div class="collapse mt-3" id="customForm">
+                    <form action="/add_custom_chore" method="POST">
+			<div class="mb-2">
+                <label class="form-label small fw-bold">Who performed this?</label>
+                <select name="user" class="form-select form-select-sm" required>
+                    <option value="Maggie">Maggie</option>
+                    <option value="Yuch">Yuch</option>
+                </select>
+            </div>
+	    <div class="mb-2">
+                <label class="form-label small fw-bold">Description</label>
+                <input type="text" name="custom_name" class="form-control form-control-sm" placeholder="e.g. Drive somewhere" required>
+            </div>
+                        <input type="number" step="0.01" name="custom_amount" class="form-control form-control-sm mb-2" placeholder="Amount $" required>
+                        <button type="submit" class="btn btn-sm btn-dark w-100">Save Custom</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            <div id="calendar"></div>
+
+            <div class="collapse mt-3" id="dailyCollapse">
+                <div class="card card-body shadow-sm border-0">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        <h5 class="mb-0" id="selected-date-label">Tasks</h5>
+                        <button type="button" class="btn-close" onclick="closeCollapse()"></button>
+                    </div>
+                    <div id="collapse-list-content" class="list-group list-group-flush"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="move-banner" class="fixed-bottom bg-primary text-white p-3 shadow-lg d-none animate__animated animate__slideInUp">
+    <div class="container d-flex justify-content-between align-items-center">
+        <div>
+            <span class="spinner-grow spinner-grow-sm me-2" role="status"></span>
+            Moving <strong id="move-task-name">Task</strong>... Tap new date on calendar.
+        </div>
+        <button class="btn btn-sm btn-light fw-bold" onclick="cancelMove()">Cancel</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    let moveMode = false;
+    let taskToMove = null;
+    let bsCollapse;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const collapseEl = document.getElementById('dailyCollapse');
+        bsCollapse = new bootstrap.Collapse(collapseEl, { toggle: false });
+
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            height: 'auto',
+            headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,dayGridWeek' },
+            editable: true,
+            droppable: true,
+            eventLongPressDelay: 300, 
+            events: '/api/events',
+
+            // Standard Drag and Drop (Desktop)
+            eventDrop: function(info) {
+                executeMove(info.event.id, info.event.startStr.split('T')[0], () => {
+                    info.revert();
+                });
+            },
+
+            // Click Logic (Mobile Move or Detail View)
+            dateClick: function(info) {
+                if (moveMode && taskToMove) {
+                    executeMove(taskToMove, info.dateStr, cancelMove);
+                } else {
+                    updateCollapsibleList(info.dateStr, calendar);
+                }
+            }
+        });
+        calendar.render();
+    });
+
+    function updateCollapsibleList(dateStr, calendar) {
+        const listContent = document.getElementById('collapse-list-content');
+        const label = document.getElementById('selected-date-label');
+        const events = calendar.getEvents().filter(e => e.startStr.split('T')[0] === dateStr);
+
+        label.innerHTML = `📅 Tasks for <strong>${dateStr}</strong>`;
+        listContent.innerHTML = "";
+
+        if (events.length === 0) {
+            listContent.innerHTML = `<div class="py-3 text-center text-muted">No chores logged for this day.</div>`;
+        } else {
+            events.forEach(event => {
+                const item = document.createElement('div');
+                item.className = "list-group-item d-flex justify-content-between align-items-center bg-transparent px-0";
+                item.innerHTML = `
+                    <span>
+                        <span class="badge me-2" style="background-color: ${event.backgroundColor}; width: 10px; height: 10px; display: inline-block; padding: 0;"> </span>
+                        ${event.title}
+                    </span>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary me-2" onclick="startMove(${event.id}, '${event.title.split('(')[0]}')">Move</button>
+                        <button class="btn btn-sm btn-link text-danger p-0 text-decoration-none" onclick="deleteEvent(${event.id})">Delete</button>
+                    </div>
+                `;
+                listContent.appendChild(item);
+            });
+        }
+        bsCollapse.show();
+        document.getElementById('dailyCollapse').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function executeMove(id, newDate, errorCallback) {
+        fetch('/api/move_chore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id, start: newDate })
+        }).then(response => {
+            if (response.ok) {
+                location.reload(); 
+            } else {
+                alert("Move failed: Weekly limit reached for this task!");
+                if (errorCallback) errorCallback();
+            }
+        });
+    }
+
+    function startMove(id, title) {
+        moveMode = true;
+        taskToMove = id;
+        document.getElementById('move-task-name').innerText = title;
+        document.getElementById('move-banner').classList.remove('d-none');
+        bsCollapse.hide();
+        // Add visual hint to calendar
+        document.getElementById('calendar').classList.add('moving-active');
+    }
+
+    function cancelMove() {
+        moveMode = false;
+        taskToMove = null;
+        document.getElementById('move-banner').classList.add('d-none');
+        document.getElementById('calendar').classList.remove('moving-active');
+    }
+
+    function deleteEvent(id) {
+        if (confirm("Delete this chore entry?")) {
+            fetch(`/api/delete_log/${id}`, { method: 'DELETE' }).then(() => location.reload());
+        }
+    }
+
+    function closeCollapse() { bsCollapse.hide(); }
+</script>
+
+</body>
+</html>

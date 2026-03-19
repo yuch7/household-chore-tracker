@@ -1,0 +1,11 @@
+services:
+  chore-app:
+    build: .
+    container_name: chore_tracker
+    ports:
+      - "7990:7990"
+    volumes:
+      - ./chore_data:/app/instance
+    environment:
+      - TZ=America/Toronto
+    restart: always
